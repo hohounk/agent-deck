@@ -462,6 +462,13 @@ type UISettings struct {
 	// Empty or unknown values fall back to "compact".
 	SidebarDensity string `toml:"sidebar_density,omitempty"`
 
+	// SidebarContextTokens shows the current context size of each Claude
+	// session (for example "115.2K") on its metadata line in the embedded
+	// sidebar. The background status tick reads it from the transcript. Nil
+	// means on. Set false to hide the count and stop the per-tick transcript
+	// stats. It has no effect on the classic layout.
+	SidebarContextTokens *bool `toml:"sidebar_context_tokens,omitempty"`
+
 	// PreviewPct is the percentage of horizontal width allocated to the
 	// preview pane (sessions list gets the remainder). Valid range: 10-90.
 	// Default: 65 (current behavior — sessions 35 / preview 65).
@@ -734,6 +741,15 @@ func (u UISettings) GetSidebarDensity() string {
 		return SidebarDensityAuto
 	}
 	return DefaultSidebarDensity
+}
+
+// GetSidebarContextTokens reports whether the embedded sidebar shows the
+// context size of each Claude session. Defaults to true when unset.
+func (u UISettings) GetSidebarContextTokens() bool {
+	if u.SidebarContextTokens == nil {
+		return true
+	}
+	return *u.SidebarContextTokens
 }
 
 // normalizeUIHiddenTools lowercases, dedupes, and drops unknown entries from
