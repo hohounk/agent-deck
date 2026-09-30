@@ -104,13 +104,15 @@ func TestSidebarContextTokensRefreshRunsOnlyOnTheStatusTick(t *testing.T) {
 		t.Fatalf("read home.go: %v", err)
 	}
 	body := funcBody(t, string(src), "func (h *Home) backgroundStatusUpdate() {")
-	want := "\tif !h.hideContextTokens.Load() {\n" +
+	want := "\tif h.contextTokensShown() {\n" +
 		"\t\th.contextTokens.refresh(instances)\n" +
+		"\t} else {\n" +
+		"\t\th.contextTokens.clear()\n" +
 		"\t}\n" +
 		"\th.refreshSessionRenderSnapshot(instances)\n"
 	if !strings.Contains(body, want) {
 		t.Fatalf("backgroundStatusUpdate must refresh the context tokens cache behind "+
-			"hideContextTokens, immediately before its render snapshot:\n%s", want)
+			"contextTokensShown, and clear it otherwise, immediately before its render snapshot:\n%s", want)
 	}
 
 	files, err := filepath.Glob("*.go")
@@ -147,6 +149,7 @@ func TestNilContextTokensCacheRefreshIsANoOp(t *testing.T) {
 
 func TestRenderSnapshotCarriesContextTokens(t *testing.T) {
 	home, inst, _ := armHomeWithOneSession(t)
+	home.embeddedLayout = true
 	home.contextTokens = knownContextTokensCache(inst.ID, 115200)
 	home.refreshSessionRenderSnapshot([]*session.Instance{inst})
 	state := home.getSessionRenderSnapshot()[inst.ID]
@@ -214,4 +217,54 @@ func TestEmbeddedRowAtMinimalDensityShowsNoContextTokens(t *testing.T) {
 	if strings.Contains(lines[0], "115.2K") {
 		t.Fatalf("minimal row shows the context count: %q", lines[0])
 	}
+}
+
+// TestContextTokensShownOnlyInTheEmbeddedLayoutWhenOn: the classic layout
+// never renders the count, so it must not pay for the per-tick reads.
+func TestContextTokensShownOnlyInTheEmbeddedLayoutWhenOn(t *testing.T) {
+	for _, tc := range []struct {
+		embedded, hidden, want bool
+	}{
+		{embedded: true, hidden: false, want: true},
+		{embedded: true, hidden: true, want: false},
+		{embedded: false, hidden: false, want: false},
+		{embedded: false, hidden: true, want: false},
+	} {
+		home := &Home{embeddedLayout: tc.embedded}
+		home.hideContextTokens.Store(tc.hidden)
+		if got := home.contextTokensShown(); got != tc.want {
+			t.Errorf("embedded=%v hidden=%v: contextTokensShown = %v, want %v", tc.embedded, tc.hidden, got, tc.want)
+		}
+	}
+}
+
+// TestRenderSnapshotSkipsContextTokensWhenNotShown: a value cached before the
+// setting went off must not reach the row when it comes back on.
+func TestRenderSnapshotSkipsContextTokensWhenNotShown(t *testing.T) {
+	home, inst, _ := armHomeWithOneSession(t)
+	home.contextTokens = knownContextTokensCache(inst.ID, 115200)
+
+	home.embeddedLayout = true
+	home.hideContextTokens.Store(true)
+	home.refreshSessionRenderSnapshot([]*session.Instance{inst})
+	if state := home.getSessionRenderSnapshot()[inst.ID]; state.contextTokensKnown {
+		t.Errorf("hidden: snapshot context tokens = (%d, true), want unknown", state.contextTokens)
+	}
+
+	home.embeddedLayout = false
+	home.hideContextTokens.Store(false)
+	home.refreshSessionRenderSnapshot([]*session.Instance{inst})
+	if state := home.getSessionRenderSnapshot()[inst.ID]; state.contextTokensKnown {
+		t.Errorf("classic layout: snapshot context tokens = (%d, true), want unknown", state.contextTokens)
+	}
+}
+
+func TestContextTokensCacheClearDropsEveryValue(t *testing.T) {
+	c := knownContextTokensCache("a", 115200)
+	c.clear()
+	if n, ok := c.get("a"); ok {
+		t.Fatalf("get after clear = (%d, true), want unknown", n)
+	}
+	var nilCache *contextTokensCache
+	nilCache.clear()
 }

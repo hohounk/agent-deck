@@ -3939,6 +3939,14 @@ func (h *Home) cleanupNotifications() {
 	h.boundKeysMu.Unlock()
 }
 
+// contextTokensShown reports whether a sidebar row shows the context size:
+// only the embedded layout renders it, and [ui] sidebar_context_tokens = false
+// hides it. embeddedLayout is set once in NewHomeWithProfileAndMode, so the
+// background status goroutine may read it.
+func (h *Home) contextTokensShown() bool {
+	return h.embeddedLayout && !h.hideContextTokens.Load()
+}
+
 // applySavedLayoutSettings applies the [ui] values the settings panel just
 // saved. sidebar_density and sidebar_context_tokens are live.
 // embedded_terminal is not: main negotiates the terminal protocol for the
@@ -6055,7 +6063,9 @@ func (h *Home) refreshSessionRenderSnapshot(instances []*session.Instance) {
 		// A map read under the cache's read lock: the file I/O already ran in
 		// the cache refresh of backgroundStatusUpdate. A nil cache (a Home
 		// built without NewHome) reads as unknown.
-		state.contextTokens, state.contextTokensKnown = h.contextTokens.get(inst.ID)
+		if h.contextTokensShown() {
+			state.contextTokens, state.contextTokensKnown = h.contextTokens.get(inst.ID)
+		}
 		// Look up pane title from the already-refreshed tmux cache.
 		// Only RefreshPaneInfoCache (called from backgroundStatusUpdate) keeps
 		// the cache fresh; processStatusUpdate and other rebuild paths run on
@@ -6727,8 +6737,10 @@ func (h *Home) backgroundStatusUpdate() {
 	// The context tokens cache stats each Claude transcript and re-reads the
 	// changed ones. It runs here, off the render path, so the snapshot below
 	// carries this tick's values.
-	if !h.hideContextTokens.Load() {
+	if h.contextTokensShown() {
 		h.contextTokens.refresh(instances)
+	} else {
+		h.contextTokens.clear()
 	}
 	h.refreshSessionRenderSnapshot(instances)
 

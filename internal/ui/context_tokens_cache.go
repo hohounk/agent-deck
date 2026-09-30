@@ -92,6 +92,19 @@ func (c *contextTokensCache) refresh(instances []*session.Instance) {
 	c.mu.Unlock()
 }
 
+// clear drops every value, so a count cached before the setting went off
+// never reappears when it comes back on. A nil cache does nothing.
+func (c *contextTokensCache) clear() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if len(c.entries) > 0 {
+		c.entries = map[string]contextTokensEntry{}
+	}
+	c.mu.Unlock()
+}
+
 // get returns the context size of a session, and false when it is unknown.
 func (c *contextTokensCache) get(instanceID string) (int, bool) {
 	if c == nil {
