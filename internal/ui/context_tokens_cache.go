@@ -39,7 +39,12 @@ func newContextTokensCache() *contextTokensCache {
 // refresh re-reads the transcripts that changed since the last call. An
 // unchanged file costs one stat. Sessions that are archived, not Claude, have
 // no transcript on this host, or are no longer in instances get no entry.
+// A nil cache does nothing, like get: a Home built without NewHome still runs
+// backgroundStatusUpdate.
 func (c *contextTokensCache) refresh(instances []*session.Instance) {
+	if c == nil {
+		return
+	}
 	c.mu.RLock()
 	prev := c.entries
 	c.mu.RUnlock()

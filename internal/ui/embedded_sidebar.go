@@ -327,6 +327,9 @@ func (h *Home) renderEmbeddedSessionItem(
 	if restarting {
 		metadataParts = append(metadataParts, "restarting…")
 	}
+	if state.contextTokensKnown && !h.hideContextTokens.Load() {
+		metadataParts = append(metadataParts, formatTokens(int64(state.contextTokens)))
+	}
 	if !h.compactSidebar && state.paneTitle != "" && state.paneTitle != label {
 		metadataParts = append(metadataParts, state.paneTitle)
 	}

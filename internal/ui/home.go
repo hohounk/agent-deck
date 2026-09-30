@@ -352,6 +352,15 @@ type Home struct {
 	contextReportMu    sync.RWMutex
 	contextReportCache map[string]contextReportEntry
 
+	// contextTokens holds the current context size of each Claude session
+	// for the embedded sidebar's metadata line. backgroundStatusUpdate is the
+	// one caller that refreshes it, and the render snapshot reads it.
+	// hideContextTokens mirrors [ui] sidebar_context_tokens = false. It is
+	// atomic because the background status goroutine reads it while the
+	// settings panel writes it from the Bubble Tea event loop.
+	contextTokens     *contextTokensCache
+	hideContextTokens atomic.Bool
+
 	// State
 	cursor              int                    // Selected item index in flatItems
 	viewOffset          int                    // First visible item index (for scrolling)
@@ -2020,6 +2029,7 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		geminiAnalyticsCache:      make(map[string]*session.GeminiSessionAnalytics),
 		analyticsCacheTime:        make(map[string]time.Time),
 		contextReportCache:        make(map[string]contextReportEntry),
+		contextTokens:             newContextTokensCache(),
 		clearOnCompactSent:        make(map[string]time.Time),
 		launchingSessions:         make(map[string]time.Time),
 		resumingSessions:          make(map[string]time.Time),
@@ -2081,6 +2091,7 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		h.embeddedLayout = cfg.UI.GetEmbeddedTerminal()
 		h.compactSidebar = h.embeddedLayout
 		h.sidebarDensity = cfg.UI.GetSidebarDensity()
+		h.hideContextTokens.Store(!cfg.UI.GetSidebarContextTokens())
 		h.remoteLatencyRefreshSec = cfg.UI.GetRemoteLatencyRefreshSecs(cfg.SystemStats.GetRefreshSeconds())
 		h.remoteSessionRefreshSec = cfg.UI.GetRemoteSessionRefreshSecs()
 		h.footerMode = cfg.UI.GetFooter()
@@ -2093,6 +2104,7 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		h.previewOrientation = session.DefaultPreviewOrientation
 		h.embeddedLayout = (session.UISettings{}).GetEmbeddedTerminal()
 		h.compactSidebar = h.embeddedLayout
+		h.hideContextTokens.Store(!(session.UISettings{}).GetSidebarContextTokens())
 		h.remoteLatencyRefreshSec = (session.UISettings{}).GetRemoteLatencyRefreshSecs(0)
 		h.remoteSessionRefreshSec = (session.UISettings{}).GetRemoteSessionRefreshSecs()
 		h.footerMode = (session.UISettings{}).GetFooter()
@@ -3928,15 +3940,17 @@ func (h *Home) cleanupNotifications() {
 }
 
 // applySavedLayoutSettings applies the [ui] values the settings panel just
-// saved. sidebar_density is live. embedded_terminal is not: main negotiates
-// the terminal protocol for the layout once, at startup (all-motion mouse,
-// focus reporting, the stdin router and stdout wrapper), and the classic path
-// stays byte-identical when the option is off. Flipping h.embeddedLayout here
-// would advertise the embedded terminal while Enter fell back to the legacy
-// key-sender, so a changed value is stored and takes effect at the next
-// launch, and the user is told so.
+// saved. sidebar_density and sidebar_context_tokens are live.
+// embedded_terminal is not: main negotiates the terminal protocol for the
+// layout once, at startup (all-motion mouse, focus reporting, the stdin
+// router and stdout wrapper), and the classic path stays byte-identical when
+// the option is off. Flipping h.embeddedLayout here would advertise the
+// embedded terminal while Enter fell back to the legacy key-sender, so a
+// changed value is stored and takes effect at the next launch, and the user
+// is told so.
 func (h *Home) applySavedLayoutSettings(ui session.UISettings) {
 	h.sidebarDensity = ui.GetSidebarDensity()
+	h.hideContextTokens.Store(!ui.GetSidebarContextTokens())
 	if want := ui.GetEmbeddedTerminal(); want != h.embeddedLayout {
 		state := "off"
 		if want {
@@ -5870,6 +5884,12 @@ type sessionRenderState struct {
 	// callers that build a fake snapshot without touching this field (many
 	// tests do) get the pre-finding-1 behavior of counting everything.
 	archivedSuperseded bool
+
+	// contextTokens is the current context size of a Claude session, copied
+	// from Home.contextTokens. contextTokensKnown is false when the size is
+	// unknown, and the row then shows no count rather than 0.
+	contextTokens      int
+	contextTokensKnown bool
 }
 
 // shouldPersistAutoNameDesc decides whether the background status loop should
@@ -6032,6 +6052,10 @@ func (h *Home) refreshSessionRenderSnapshot(instances []*session.Instance) {
 			autoName:     inst.GetAutoName(),
 			autoNameDesc: inst.GetAutoNameDescription(),
 		}
+		// A map read under the cache's read lock: the file I/O already ran in
+		// the cache refresh of backgroundStatusUpdate. A nil cache (a Home
+		// built without NewHome) reads as unknown.
+		state.contextTokens, state.contextTokensKnown = h.contextTokens.get(inst.ID)
 		// Look up pane title from the already-refreshed tmux cache.
 		// Only RefreshPaneInfoCache (called from backgroundStatusUpdate) keeps
 		// the cache fresh; processStatusUpdate and other rebuild paths run on
@@ -6699,6 +6723,12 @@ func (h *Home) backgroundStatusUpdate() {
 	if statusChanged.Load() {
 		h.cachedStatusCounts.valid.Store(false)
 		h.publishWebSessionStates(instances)
+	}
+	// The context tokens cache stats each Claude transcript and re-reads the
+	// changed ones. It runs here, off the render path, so the snapshot below
+	// carries this tick's values.
+	if !h.hideContextTokens.Load() {
+		h.contextTokens.refresh(instances)
 	}
 	h.refreshSessionRenderSnapshot(instances)
 
