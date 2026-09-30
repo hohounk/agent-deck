@@ -191,6 +191,30 @@ func TestContextTokensCache_ReadErrorIsUnknown(t *testing.T) {
 	}
 }
 
+// TestContextTokensCache_ReadErrorIsRetried: a transient read error on an
+// idle transcript must not stick until the file changes again.
+func TestContextTokensCache_ReadErrorIsRetried(t *testing.T) {
+	projectPath, write := contextTokensFixture(t)
+	write("aaaaaaaa-0000-0000-0000-000000000005", "{}\n")
+	inst := claudeInstance("a", projectPath, "aaaaaaaa-0000-0000-0000-000000000005")
+
+	fake := &scriptedRead{
+		results: []session.ContextTokensResult{{}, found(300)},
+		errs:    []error{errors.New("read failed"), nil},
+	}
+	c := newContextTokensCache()
+	c.read = fake.read
+
+	c.refresh([]*session.Instance{inst})
+	c.refresh([]*session.Instance{inst})
+	if fake.calls != 2 {
+		t.Fatalf("read calls after an error on an unchanged file = %d, want 2", fake.calls)
+	}
+	if n, ok := c.get(inst.ID); !ok || n != 300 {
+		t.Fatalf("get = (%d, %v), want (300, true)", n, ok)
+	}
+}
+
 // TestContextTokensCache_OnlyLiveClaudeRowsHaveEntries: archived, non-Claude
 // and transcript-less sessions get no entry, and a session that leaves the
 // list loses its entry.
