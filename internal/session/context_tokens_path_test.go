@@ -21,12 +21,8 @@ func TestContextTokensTranscriptPath_UsesTheInstanceConfigDir(t *testing.T) {
 	withConfig(t, cfg)
 
 	projectPath := t.TempDir()
-	resolved := projectPath
-	if r, err := filepath.EvalSymlinks(projectPath); err == nil {
-		resolved = r
-	}
 	sessionID := "22222222-3333-4444-5555-666666666666"
-	projDir := filepath.Join(groupDir, "projects", ConvertToClaudeDirName(resolved))
+	projDir := claudeProjectDirForTest(t, groupDir, projectPath)
 	if err := os.MkdirAll(projDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

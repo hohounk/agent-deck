@@ -69,14 +69,14 @@ func (c *contextTokensCache) refresh(instances []*session.Instance) {
 			continue
 		}
 
-		entry := contextTokensEntry{path: path, size: info.Size(), mtime: info.ModTime()}
 		res, err := c.read(path)
+		if err != nil {
+			// Unknown, with no entry: the row shows nothing rather than a
+			// stale number, and the next tick reads again.
+			continue
+		}
+		entry := contextTokensEntry{path: path, size: info.Size(), mtime: info.ModTime()}
 		switch {
-		case err != nil:
-			// Unknown: the row shows nothing rather than a stale number.
-			// Drop the stat key, so the next tick reads again even when
-			// the transcript stays idle.
-			entry.size, entry.mtime = 0, time.Time{}
 		case res.Status == session.ContextTokensFound:
 			entry.tokens, entry.known = res.Tokens, true
 		case res.Status == session.ContextTokensExhausted && samePath:

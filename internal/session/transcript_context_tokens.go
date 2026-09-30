@@ -65,10 +65,8 @@ type contextTokensRecord struct {
 // is above zero, the same sum as SessionAnalytics.CurrentContextTokens. A
 // compact_boundary record newer than that gives ContextTokensNone: every older
 // usage record describes the context from before the compaction, and the
-// compactMetadata.postTokens of the record is not the context size either,
-// because it leaves out the system prompt, tools, memory and skills (5837
-// against 35.1k in /context, measured on 2026-10-01). The size stays unknown
-// until the next turn writes a usage record.
+// record's compactMetadata.postTokens leaves out the system prompt, tools,
+// memory and skills. The size stays unknown until the next turn.
 func ReadTranscriptContextTokens(path string) (ContextTokensResult, error) {
 	f, err := os.Open(path) // #nosec G304 -- callers pass a resolved transcript path
 	if err != nil {
