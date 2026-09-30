@@ -171,6 +171,36 @@ func TestContextTokensCache_NewPathDropsTheOldValue(t *testing.T) {
 	}
 }
 
+// TestContextTokensCache_NoneOnTheSamePathIsUnknown is the /compact case: the
+// transcript keeps its path, a compact_boundary lands after the last usage,
+// and the reader gives None. The row drops the count from before the
+// compaction, where Exhausted on the same path would keep it.
+func TestContextTokensCache_NoneOnTheSamePathIsUnknown(t *testing.T) {
+	projectPath, write := contextTokensFixture(t)
+	path := write("aaaaaaaa-0000-0000-0000-000000000007", "{}\n")
+	inst := claudeInstance("a", projectPath, "aaaaaaaa-0000-0000-0000-000000000007")
+
+	fake := &scriptedRead{results: []session.ContextTokensResult{
+		found(38300),
+		{Status: session.ContextTokensNone},
+	}}
+	c := newContextTokensCache()
+	c.read = fake.read
+
+	c.refresh([]*session.Instance{inst})
+	if n, ok := c.get(inst.ID); !ok || n != 38300 {
+		t.Fatalf("get before the compaction = (%d, %v), want (38300, true)", n, ok)
+	}
+	bumpFile(t, path)
+	c.refresh([]*session.Instance{inst})
+	if fake.calls != 2 {
+		t.Fatalf("read calls = %d, want 2", fake.calls)
+	}
+	if n, ok := c.get(inst.ID); ok {
+		t.Errorf("get after None on the same path = (%d, true), want unknown", n)
+	}
+}
+
 func TestContextTokensCache_ReadErrorIsUnknown(t *testing.T) {
 	projectPath, write := contextTokensFixture(t)
 	path := write("aaaaaaaa-0000-0000-0000-000000000004", "{}\n")

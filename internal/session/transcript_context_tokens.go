@@ -11,8 +11,8 @@ type ContextTokensStatus int
 
 const (
 	// ContextTokensNone: the transcript holds no record that gives the
-	// current context size (a new transcript, or a compaction that did not
-	// record postTokens). Show nothing.
+	// current context size (a new transcript, or a compaction with no turn
+	// after it). Show nothing.
 	ContextTokensNone ContextTokensStatus = iota
 	// ContextTokensFound: Tokens is the current context size.
 	ContextTokensFound
@@ -55,9 +55,6 @@ type contextTokensRecord struct {
 			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	} `json:"message"`
-	CompactMetadata struct {
-		PostTokens int `json:"postTokens"`
-	} `json:"compactMetadata"`
 }
 
 // ReadTranscriptContextTokens returns the current context size of the Claude
@@ -66,9 +63,12 @@ type contextTokensRecord struct {
 // The size is input_tokens + cache_creation_input_tokens +
 // cache_read_input_tokens of the newest main-chain assistant record whose sum
 // is above zero, the same sum as SessionAnalytics.CurrentContextTokens. A
-// compact_boundary record newer than that gives compactMetadata.postTokens
-// instead, because every older usage record describes the context from before
-// the compaction.
+// compact_boundary record newer than that gives ContextTokensNone: every older
+// usage record describes the context from before the compaction, and the
+// compactMetadata.postTokens of the record is not the context size either,
+// because it leaves out the system prompt, tools, memory and skills (5837
+// against 35.1k in /context, measured on 2026-10-01). The size stays unknown
+// until the next turn writes a usage record.
 func ReadTranscriptContextTokens(path string) (ContextTokensResult, error) {
 	f, err := os.Open(path) // #nosec G304 -- callers pass a resolved transcript path
 	if err != nil {
@@ -142,9 +142,6 @@ func contextTokensFromLine(line []byte) (ContextTokensResult, bool) {
 			return ContextTokensResult{Tokens: sum, Status: ContextTokensFound}, true
 		}
 	case rec.Type == "system" && rec.Subtype == "compact_boundary":
-		if post := rec.CompactMetadata.PostTokens; post > 0 {
-			return ContextTokensResult{Tokens: post, Status: ContextTokensFound}, true
-		}
 		return ContextTokensResult{Status: ContextTokensNone}, true
 	}
 	return ContextTokensResult{}, false

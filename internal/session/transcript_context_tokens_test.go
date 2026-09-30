@@ -52,9 +52,12 @@ func TestReadTranscriptContextTokens(t *testing.T) {
 				`{"type":"ai-title","aiTitle":"t"}`,
 				`{"type":"mode","mode":"default"}`),
 			ContextTokensResult{Tokens: 438310, Status: ContextTokensFound}},
+		// postTokens is not the context size: it leaves out the system
+		// prompt, tools, memory and skills. The size is unknown until the
+		// next turn writes a usage record.
 		{"compact_boundary with postTokens after the usage",
 			jsonlBody(newer, compactBoundaryLine(13580), `{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"summary"}}`),
-			ContextTokensResult{Tokens: 13580, Status: ContextTokensFound}},
+			ContextTokensResult{Status: ContextTokensNone}},
 		{"compact_boundary without postTokens after the usage",
 			jsonlBody(newer, compactBoundaryLine(0)),
 			ContextTokensResult{Status: ContextTokensNone}},
