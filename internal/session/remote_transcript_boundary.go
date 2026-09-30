@@ -62,6 +62,12 @@ package session
 //     daemon's hand-off, gated again in the worker because the instance
 //     may be re-read there
 //
+// Sidebar context size:
+//
+// 19. ContextTokensTranscriptPath           (context_tokens_path.go) — the
+//     embedded sidebar reads the current context size of every Claude row
+//     from this transcript on each background tick
+//
 // Recall has no other door: the index binds a conversation to a deck session
 // only through an authoritative session_links row (RecallRegistry.DeckID),
 // never by ProjectPath, and `recall context --into` delivers text to a

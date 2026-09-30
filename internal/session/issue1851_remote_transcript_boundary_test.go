@@ -478,6 +478,10 @@ func TestRemoteTranscriptBoundary_EveryEntryPointRefuses(t *testing.T) {
 			recallNotifyBatch([]recallNotifyReq{{inst: local, event: "worker_done"}})
 			return recall.QueueLen(queuePath) == before+1
 		}},
+		{"19 ContextTokensTranscriptPath", func() (string, bool) {
+			p := remote.ContextTokensTranscriptPath()
+			return p, p != ""
+		}, func() bool { return local.ContextTokensTranscriptPath() != "" }},
 	}
 	for _, d := range doors {
 		got, resolved := d.remote()
@@ -495,8 +499,8 @@ func TestRemoteTranscriptBoundary_EveryEntryPointRefuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The doc is a gofmt-aligned list: "//  1. name" through "// 18. name".
-	for n := 1; n <= 18; n++ {
+	// The doc is a gofmt-aligned list: "//  1. name" through "// 19. name".
+	for n := 1; n <= 19; n++ {
 		if !regexp.MustCompile(`(?m)^//\s+` + strconv.Itoa(n) + `\. \S`).Match(doc) {
 			t.Errorf("remote_transcript_boundary.go lost door %d", n)
 		}
