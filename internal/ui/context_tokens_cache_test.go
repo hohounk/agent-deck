@@ -146,8 +146,8 @@ func TestContextTokensCache_ExhaustedKeepsTheValueOfTheSamePath(t *testing.T) {
 	}
 }
 
-// TestContextTokensCache_NewPathDropsTheOldValue is the /clear case: the
-// session id moves to a new transcript, which has no usage yet.
+// TestContextTokensCache_NewPathDropsTheOldValue: when the session id is
+// rebound to a new transcript that has no usage yet, the old value goes.
 func TestContextTokensCache_NewPathDropsTheOldValue(t *testing.T) {
 	for _, second := range []session.ContextTokensResult{
 		{Status: session.ContextTokensNone},
