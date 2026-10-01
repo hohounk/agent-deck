@@ -327,7 +327,8 @@ func (h *Home) renderEmbeddedSessionItem(
 	if restarting {
 		metadataParts = append(metadataParts, "restarting…")
 	}
-	if state.contextTokensKnown && !h.hideContextTokens.Load() {
+	// The same gate as the cache refresh and the render snapshot.
+	if h.contextTokensShown() && state.contextTokensKnown {
 		metadataParts = append(metadataParts, formatTokens(int64(state.contextTokens)))
 	}
 	if !h.compactSidebar && state.paneTitle != "" && state.paneTitle != label {

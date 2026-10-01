@@ -206,6 +206,30 @@ func TestEmbeddedRowAddsNoContextTokensPart(t *testing.T) {
 	}
 }
 
+// TestEmbeddedRowUsesTheContextTokensShownGate: the row decides with the
+// same gate as the cache refresh and the render snapshot, so a known value
+// that reaches the row outside the embedded layout still adds no part.
+func TestEmbeddedRowUsesTheContextTokensShownGate(t *testing.T) {
+	home, inst, state := contextTokensRowFixture(t)
+	home.embeddedLayout = false
+
+	var b strings.Builder
+	home.renderEmbeddedSessionItem(&b, session.Item{Type: session.ItemTypeSession, Session: inst, Level: 1}, false, state, 100)
+	lines := strings.Split(strings.TrimSuffix(ansi.Strip(b.String()), "\n"), "\n")
+	want := []string{"idle", "claude", "fixing the parser"}
+	if got := embeddedMetadataParts(t, lines); !slices.Equal(got, want) {
+		t.Fatalf("metadata parts outside the embedded layout = %q, want %q", got, want)
+	}
+
+	src, err := os.ReadFile("embedded_sidebar.go")
+	if err != nil {
+		t.Fatalf("read embedded_sidebar.go: %v", err)
+	}
+	if body := funcBody(t, string(src), "func (h *Home) renderEmbeddedSessionItem("); strings.Contains(body, "hideContextTokens") {
+		t.Fatal("renderEmbeddedSessionItem reads hideContextTokens: decide with h.contextTokensShown() alone")
+	}
+}
+
 func TestEmbeddedRowAtMinimalDensityShowsNoContextTokens(t *testing.T) {
 	home, inst, state := contextTokensRowFixture(t)
 	home.sidebarDensity = session.SidebarDensityMinimal
