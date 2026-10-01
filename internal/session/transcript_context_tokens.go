@@ -62,11 +62,12 @@ type contextTokensRecord struct {
 //
 // The size is input_tokens + cache_creation_input_tokens +
 // cache_read_input_tokens of the newest main-chain assistant record whose sum
-// is above zero, the same sum as SessionAnalytics.CurrentContextTokens. A
-// compact_boundary record newer than that gives ContextTokensNone: every older
-// usage record describes the context from before the compaction, and the
-// record's compactMetadata.postTokens leaves out the system prompt, tools,
-// memory and skills. The size stays unknown until the next turn.
+// is above zero. SessionAnalytics.CurrentContextTokens uses the same sum, but
+// the record choice differs: sidechain records are skipped, and a
+// compact_boundary record newer than the usage record gives ContextTokensNone.
+// Every older usage record describes the context from before the compaction,
+// and the record's compactMetadata.postTokens leaves out the system prompt,
+// tools, memory and skills. The size stays unknown until the next turn.
 func ReadTranscriptContextTokens(path string) (ContextTokensResult, error) {
 	f, err := os.Open(path) // #nosec G304 -- callers pass a resolved transcript path
 	if err != nil {

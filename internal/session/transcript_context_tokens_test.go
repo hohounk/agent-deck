@@ -64,6 +64,12 @@ func TestReadTranscriptContextTokens(t *testing.T) {
 		{"usage after a compact_boundary",
 			jsonlBody(older, compactBoundaryLine(13580), newer),
 			ContextTokensResult{Tokens: 438310, Status: ContextTokensFound}},
+		// The compact_boundary prefilter matches any line that carries the
+		// quoted word, so only a system record of that subtype may end the
+		// scan with None.
+		{"user record quoting compact_boundary after the usage",
+			jsonlBody(newer, `{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"compact_boundary"}]}}`),
+			ContextTokensResult{Tokens: 438310, Status: ContextTokensFound}},
 		{"sidechain record is the newest usage",
 			jsonlBody(older, `{"type":"assistant","isSidechain":true,"message":{"usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":999}}}`),
 			ContextTokensResult{Tokens: 102010, Status: ContextTokensFound}},
